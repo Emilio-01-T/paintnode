@@ -2324,7 +2324,21 @@ mod tests {
             .expect("kill lingering process tree");
         join_output_readers_bounded(vec![reader], Duration::from_secs(1))
             .expect("inherited output pipe closed");
-        assert_ne!(unsafe { libc::kill(descendant_id, 0) }, 0);
+
+        // The orphaned descendant can remain visible briefly as a zombie
+        // after SIGKILL until the host init process reaps it. Poll for that
+        // handoff instead of racing it with a single immediate probe.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if unsafe { libc::kill(descendant_id, 0) } != 0 {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "provider descendant remained after bridge-exit cleanup"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
