@@ -10,8 +10,6 @@ const options = {
     'linux-x86_64',
     'linux-x86_64-appimage',
     'linux-x86_64-deb',
-    'darwin-aarch64',
-    'darwin-x86_64',
   ],
 };
 
@@ -40,7 +38,7 @@ test('rejects missing targets, signatures, versions, and foreign repositories', 
   assert.throws(() => verifyUpdaterJson(missing, options), /missing linux-x86_64-deb/);
 
   const unsigned = fixture();
-  unsigned.platforms['darwin-aarch64'].signature = '';
+  unsigned.platforms['linux-x86_64-appimage'].signature = '';
   assert.throws(() => verifyUpdaterJson(unsigned, options), /no updater signature/);
 
   const wrongVersion = fixture();
@@ -48,7 +46,7 @@ test('rejects missing targets, signatures, versions, and foreign repositories', 
   assert.throws(() => verifyUpdaterJson(wrongVersion, options), /does not match/);
 
   const foreign = fixture();
-  foreign.platforms['darwin-x86_64'].url =
+  foreign.platforms['linux-x86_64'].url =
     'https://github.com/white-cornerstone/paintnode/releases/download/paintnode-v1.2.3/PaintNode';
   assert.throws(() => verifyUpdaterJson(foreign, options), /does not point/);
 });

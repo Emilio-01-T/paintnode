@@ -52,21 +52,11 @@ jobs:
 
   build:
     needs: release-target
-    runs-on: ${{ matrix.target.runner }}
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         provider: [codex, claude]
-        target:
-          - runner: macos-14
-            platform: darwin
-            arch: arm64
-          - runner: macos-15-intel
-            platform: darwin
-            arch: x64
-          - runner: ubuntu-22.04
-            platform: linux
-            arch: x64
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -74,13 +64,12 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install Linux archive tools
-        if: matrix.target.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y zip
       - name: Download target Node runtime
         shell: bash
         run: |
-          curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${{ matrix.target.platform }}-${{ matrix.target.arch }}.tar.gz"
-          tar -xzf "node-v${NODE_VERSION}-${{ matrix.target.platform }}-${{ matrix.target.arch }}.tar.gz"
+          curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz"
+          tar -xzf "node-v${NODE_VERSION}-linux-x64.tar.gz"
       - name: Build managed provider package
         shell: bash
         run: |
@@ -93,12 +82,12 @@ jobs:
             --provider "${{ matrix.provider }}" \
             --sdk-version "$sdk" \
             --package-version "${{ inputs.package_version }}" \
-            --platform "${{ matrix.target.platform }}" \
-            --arch "${{ matrix.target.arch }}" \
-            --node "$PWD/node-v${NODE_VERSION}-${{ matrix.target.platform }}-${{ matrix.target.arch }}/bin/node"
+            --platform linux \
+            --arch x64 \
+            --node "$PWD/node-v${NODE_VERSION}-linux-x64/bin/node"
       - uses: actions/upload-artifact@v7
         with:
-          name: runtime-${{ matrix.provider }}-${{ matrix.target.platform }}-${{ matrix.target.arch }}
+          name: runtime-${{ matrix.provider }}-linux-x64
           path: dist/managed-runtimes/*
 
   publish:

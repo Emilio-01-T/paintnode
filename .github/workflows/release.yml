@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   runtime-preflight:
-    name: managed runtime targets
+    name: managed Linux runtime targets
     runs-on: ubuntu-latest
 
     steps:
@@ -33,53 +33,22 @@ jobs:
       - name: Verify release version
         run: npm run verify:release-config
 
-      - name: Verify published provider targets
+      - name: Verify published Linux provider targets
         run: |
-          node scripts/verify-managed-runtime-manifest.mjs \
-            https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json \
-            darwin arm64
-          node scripts/verify-managed-runtime-manifest.mjs \
-            https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json \
-            darwin x64
           node scripts/verify-managed-runtime-manifest.mjs \
             https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json \
             linux x64
 
-  release:
-    name: ${{ matrix.name }}
+  release-linux:
+    name: Linux x86_64
     needs: runtime-preflight
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      # tauri-action updates one shared latest.json. Serializing prevents parallel
-      # jobs from racing while replacing that release asset.
-      max-parallel: 1
-      matrix:
-        include:
-          - name: Linux x86_64
-            runner: ubuntu-22.04
-            os: linux
-            rust_targets: x86_64-unknown-linux-gnu
-            args: --bundles deb,appimage
-          - runner: macos-14
-            name: macOS arm64
-            os: darwin
-            target: aarch64-apple-darwin
-            rust_targets: aarch64-apple-darwin
-            args: --target aarch64-apple-darwin --bundles app,dmg
-          - runner: macos-15-intel
-            name: macOS x86_64
-            os: darwin
-            target: x86_64-apple-darwin
-            rust_targets: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin --bundles app,dmg
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Install Linux dependencies
-        if: matrix.os == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -104,8 +73,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_targets }}
 
       - name: Install frontend dependencies
         run: npm ci
@@ -126,56 +93,7 @@ jobs:
             echo "__PAINTNODE_RELEASE_NOTES__"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Detect Apple release signing
-        if: matrix.os == 'darwin'
-        id: apple_signing
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-        run: |
-          if [[ -n "$APPLE_CERTIFICATE" && -n "$APPLE_CERTIFICATE_PASSWORD" && -n "$APPLE_SIGNING_IDENTITY" && -n "$APPLE_API_ISSUER" && -n "$APPLE_API_KEY" && -n "$APPLE_API_KEY_P8" ]]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "Apple signing and notarization are enabled."
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Apple signing secrets are incomplete; publishing an unsigned macOS build." >&2
-          fi
-
-      - name: Prepare App Store Connect key
-        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled == 'true'
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/appstoreconnect"
-          printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/appstoreconnect/AuthKey_${APPLE_API_KEY}.p8"
-          chmod 600 "$RUNNER_TEMP/appstoreconnect/AuthKey_${APPLE_API_KEY}.p8"
-
-      - name: Import Developer ID certificate
-        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled == 'true'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ runner.temp }}-paintnode-keychain
-        run: |
-          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/paintnode-signing.keychain-db"
-
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$CERTIFICATE_PATH"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-
       - name: Build and upload Linux release assets
-        if: matrix.os == 'linux'
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -184,58 +102,18 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: paintnode-v__VERSION__
-          releaseName: PaintNode v__VERSION__
+          releaseName: PaintNode for Linux v__VERSION__
           releaseBody: ${{ steps.release_notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           retryAttempts: 3
           tauriScript: node scripts/tauri-release.mjs
-          args: ${{ matrix.args }}
-
-      - name: Build and upload signed macOS release assets
-        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled == 'true'
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/appstoreconnect/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: paintnode-v__VERSION__
-          releaseName: PaintNode v__VERSION__
-          releaseBody: ${{ steps.release_notes.outputs.body }}
-          releaseDraft: true
-          prerelease: false
-          uploadUpdaterJson: true
-          retryAttempts: 3
-          args: ${{ matrix.args }}
-
-      - name: Build and upload unsigned macOS release assets
-        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled != 'true'
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: paintnode-v__VERSION__
-          releaseName: PaintNode v__VERSION__
-          releaseBody: ${{ steps.release_notes.outputs.body }}
-          releaseDraft: true
-          prerelease: false
-          uploadUpdaterJson: true
-          retryAttempts: 3
-          args: ${{ matrix.args }}
+          args: --bundles deb,appimage
 
   publish-release:
-    name: Validate and publish release
-    needs: release
+    name: Validate and publish Linux release
+    needs: release-linux
     runs-on: ubuntu-latest
 
     steps:
@@ -250,7 +128,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Validate updater metadata
+      - name: Validate Linux updater metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -260,10 +138,9 @@ jobs:
           gh release download "$TAG" --pattern latest.json --dir "$RUNNER_TEMP/release-check"
           node scripts/verify-updater-json.mjs \
             "$RUNNER_TEMP/release-check/latest.json" \
-            linux-x86_64 linux-x86_64-appimage linux-x86_64-deb \
-            darwin-aarch64 darwin-x86_64
+            linux-x86_64 linux-x86_64-appimage linux-x86_64-deb
 
-      - name: Publish complete release
+      - name: Publish complete Linux release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

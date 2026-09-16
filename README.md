@@ -13,7 +13,9 @@
 <p align="center">
   <a href="https://github.com/white-cornerstone/paintnode">Upstream project</a>
   |
-  <a href="https://github.com/Emilio-01-T/paintnode/releases/latest">Releases</a>
+  <a href="https://github.com/Emilio-01-T/paintnode/releases/latest">Linux releases</a>
+  |
+  <a href="https://github.com/white-cornerstone/paintnode/releases/latest">macOS releases (upstream)</a>
   |
   <a href="docs/release.md">Release docs</a>
 </p>
@@ -275,9 +277,8 @@ export.
 - Local-first file I/O and project asset management.
 - macOS Quick Look extensions for ORA thumbnail and preview support.
 - Tauri desktop app built with Svelte 5, TypeScript, Rust, and Canvas2D.
-- macOS builds (signed and notarized when release credentials are configured),
-  Linux Debian/AppImage packages, and signed Tauri updater metadata from GitHub
-  Releases.
+- Linux Debian/AppImage packages and signed Tauri updater metadata from GitHub
+  Releases. macOS binaries remain on the original upstream release channel.
 - GPL-3.0-or-later source code.
 
 ## Trust Model
@@ -313,15 +314,20 @@ https://github.com/Emilio-01-T/paintnode/releases
 
 ## Download
 
-Download the latest public build from:
+Download the latest Linux x86_64 build from:
 
 [github.com/Emilio-01-T/paintnode/releases/latest](https://github.com/Emilio-01-T/paintnode/releases/latest)
 
 Linux x86_64 releases include a `.deb` package for Ubuntu/Debian (with a desktop
-menu entry and application icons) and a portable AppImage. macOS release assets
-and their signing status are documented on each release. PaintNode checks this
-repository's GitHub Releases for updater metadata; Linux `.deb` and AppImage
-installations each receive an update in the same package format.
+menu entry and application icons) and a portable AppImage. Linux `.deb` and
+AppImage installations each receive an update in the same package format.
+
+For macOS, use the original White Cornerstone releases:
+
+[github.com/white-cornerstone/paintnode/releases/latest](https://github.com/white-cornerstone/paintnode/releases/latest)
+
+This derivative release channel does not rebuild or replace upstream macOS
+artifacts.
 
 ## Development
 
@@ -419,12 +425,12 @@ PaintNode releases are driven by tags named like:
 paintnode-v0.2.1
 ```
 
-The GitHub Actions release workflow builds macOS app bundles (signed and
-notarized when Apple credentials are configured) plus Linux x86_64 `.deb` and
-AppImage assets, uploads updater artifacts, and publishes `latest.json` for the
-in-app updater. Before the first Linux release, publish the `linux-x64` managed
-Codex and Claude artifacts with the **Provider runtimes** workflow so in-app
-provider setup is available on Linux.
+The GitHub Actions release workflow builds only Linux x86_64 `.deb` and AppImage
+assets, uploads their signed updater artifacts, and publishes `latest.json` for
+the in-app Linux updater. Before the first Linux release, publish the `linux-x64`
+managed Codex and Claude artifacts with the **Provider runtimes** workflow so
+in-app provider setup is available on Linux. macOS downloads continue to come
+from the original upstream repository.
 
 See [docs/release.md](docs/release.md) for the signing secrets and release
 checklist.

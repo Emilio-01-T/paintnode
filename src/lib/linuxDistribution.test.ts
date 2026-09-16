@@ -3,6 +3,7 @@ import ciWorkflow from '../../.github/workflows/ci.yml?raw';
 import providerRuntimeWorkflow from '../../.github/workflows/provider-runtimes.yml?raw';
 import releaseWorkflow from '../../.github/workflows/release.yml?raw';
 import packageJson from '../../package.json?raw';
+import readme from '../../README.md?raw';
 import tauriConfig from '../../src-tauri/tauri.conf.json?raw';
 
 describe('Linux distribution contract', () => {
@@ -19,7 +20,7 @@ describe('Linux distribution contract', () => {
     expect(releaseWorkflow).toContain('runtime-preflight:');
     expect(releaseWorkflow).toContain('needs: runtime-preflight');
     expect(releaseWorkflow).toContain('verify-managed-runtime-manifest.mjs');
-    expect(releaseWorkflow).toContain('runner: ubuntu-22.04');
+    expect(releaseWorkflow).toContain('runs-on: ubuntu-22.04');
     expect(releaseWorkflow).toContain('args: --bundles deb,appimage');
     expect(releaseWorkflow).toContain('TAURI_SIGNING_PRIVATE_KEY:');
     expect(releaseWorkflow).toContain("PAINTNODE_SIGN_LINUX_DEB: '1'");
@@ -27,27 +28,24 @@ describe('Linux distribution contract', () => {
   });
 
   it('publishes managed provider runtimes for Linux x64', () => {
-    expect(providerRuntimeWorkflow).toContain('runs-on: ${{ matrix.target.runner }}');
-    expect(providerRuntimeWorkflow).toMatch(/runner: ubuntu-22\.04\s+platform: linux\s+arch: x64/);
-    expect(providerRuntimeWorkflow).toContain('runtime-${{ matrix.provider }}-${{ matrix.target.platform }}-${{ matrix.target.arch }}');
+    expect(providerRuntimeWorkflow).toContain('runs-on: ubuntu-22.04');
+    expect(providerRuntimeWorkflow).toContain('--platform linux');
+    expect(providerRuntimeWorkflow).toContain('--arch x64');
+    expect(providerRuntimeWorkflow).toContain('runtime-${{ matrix.provider }}-linux-x64');
+    expect(providerRuntimeWorkflow).not.toContain('macos-');
+    expect(providerRuntimeWorkflow).not.toContain('--platform darwin');
   });
 
-  it('builds each macOS architecture on its native runner with optional signing', () => {
-    expect(releaseWorkflow).toContain('runner: macos-14');
-    expect(releaseWorkflow).toContain('args: --target aarch64-apple-darwin --bundles app,dmg');
-    expect(releaseWorkflow).toContain('runner: macos-15-intel');
-    expect(releaseWorkflow).toContain('args: --target x86_64-apple-darwin --bundles app,dmg');
-    expect(releaseWorkflow).toContain('Detect Apple release signing');
-    expect(releaseWorkflow).toContain('publishing an unsigned macOS build');
-    expect(providerRuntimeWorkflow).toMatch(/runner: macos-15-intel\s+platform: darwin\s+arch: x64/);
-  });
-
-  it('serializes updater metadata and publishes only after validation', () => {
-    expect(releaseWorkflow).toContain('max-parallel: 1');
+  it('publishes Linux updater metadata only after validation', () => {
     expect(releaseWorkflow).toContain('releaseDraft: true');
     expect(releaseWorkflow).toContain('verify-updater-json.mjs');
     expect(releaseWorkflow).toContain('linux-x86_64-appimage linux-x86_64-deb');
     expect(releaseWorkflow).toContain('gh release edit "paintnode-v${VERSION}" --draft=false --latest');
+    expect(releaseWorkflow).not.toContain('macos-');
+    expect(releaseWorkflow).not.toContain('darwin-');
+    expect(releaseWorkflow).not.toContain('APPLE_');
+    expect(readme).toContain('github.com/white-cornerstone/paintnode/releases/latest');
+    expect(readme).toContain('does not rebuild or replace upstream macOS');
   });
 
   it('provides an unsigned local package command and a high-resolution launcher icon', () => {
