@@ -8,7 +8,6 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
-#[cfg(windows)]
 use sha2::{Digest, Sha256};
 
 use crate::ai::{
@@ -150,17 +149,53 @@ struct VerifiedFileIdentity {
     changed_seconds: i64,
     #[cfg(unix)]
     changed_nanoseconds: i64,
-    #[cfg(windows)]
     sha256: [u8; 32],
 }
 
 impl VerifiedFileIdentity {
     fn capture(path: &Path) -> Result<Self, String> {
-        let metadata = fs::metadata(path).map_err(|error| {
+        let mut file = fs::File::open(path)
+            .map_err(|error| format!("Could not read provider at {}: {error}", path.display()))?;
+        let before = file.metadata().map_err(|error| {
             format!("Could not inspect provider at {}: {error}", path.display())
         })?;
-        if !metadata.is_file() {
+        if !before.is_file() {
             return Err(format!("Provider path is not a file: {}", path.display()));
+        }
+        let mut hasher = Sha256::new();
+        let mut buffer = [0_u8; 128 * 1024];
+        loop {
+            let count = file.read(&mut buffer).map_err(|error| {
+                format!("Could not hash provider at {}: {error}", path.display())
+            })?;
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+        }
+        let metadata = file.metadata().map_err(|error| {
+            format!(
+                "Could not reinspect provider at {}: {error}",
+                path.display()
+            )
+        })?;
+        let mut changed_while_hashing = before.len() != metadata.len()
+            || before.modified().ok() != metadata.modified().ok()
+            || before.created().ok() != metadata.created().ok();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            changed_while_hashing = changed_while_hashing
+                || before.dev() != metadata.dev()
+                || before.ino() != metadata.ino()
+                || before.ctime() != metadata.ctime()
+                || before.ctime_nsec() != metadata.ctime_nsec();
+        }
+        if changed_while_hashing {
+            return Err(format!(
+                "Provider changed while its identity was captured: {}",
+                path.display()
+            ));
         }
         #[cfg(unix)]
         use std::os::unix::fs::MetadataExt;
@@ -176,24 +211,7 @@ impl VerifiedFileIdentity {
             changed_seconds: metadata.ctime(),
             #[cfg(unix)]
             changed_nanoseconds: metadata.ctime_nsec(),
-            #[cfg(windows)]
-            sha256: {
-                let mut file = fs::File::open(path).map_err(|error| {
-                    format!("Could not hash provider at {}: {error}", path.display())
-                })?;
-                let mut hasher = Sha256::new();
-                let mut buffer = [0_u8; 128 * 1024];
-                loop {
-                    let count = file.read(&mut buffer).map_err(|error| {
-                        format!("Could not hash provider at {}: {error}", path.display())
-                    })?;
-                    if count == 0 {
-                        break;
-                    }
-                    hasher.update(&buffer[..count]);
-                }
-                hasher.finalize().into()
-            },
+            sha256: hasher.finalize().into(),
         })
     }
 
@@ -202,6 +220,7 @@ impl VerifiedFileIdentity {
         return serde_json::json!({
             "version": 1,
             "length": self.len.to_string(),
+            "sha256": self.sha256.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
             "unix": {
                 "device": self.device.to_string(),
                 "inode": self.inode.to_string(),
@@ -221,6 +240,7 @@ impl VerifiedFileIdentity {
         serde_json::json!({
             "version": 1,
             "length": self.len.to_string(),
+            "sha256": self.sha256.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
         })
         .to_string()
     }

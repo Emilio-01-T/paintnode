@@ -78,13 +78,17 @@ test('runner-bound identity rejects a synchronized replacement before native spa
   assert.equal(existsSync(sentinel), false, 'SDK runner replacement must never execute');
 });
 
-test('Windows identity digest distinguishes same-length executable replacements', () => {
+test('identity digest distinguishes same-length executable replacements on every platform', () => {
   const root = mkdtempSync(join(tmpdir(), 'paintnode-windows-identity-'));
   const provider = join(root, 'codex.exe');
   writeFileSync(provider, 'AAAA');
-  const first = captureExecutableIdentity(provider, 'win32').identity;
+  const firstWindows = captureExecutableIdentity(provider, 'win32').identity;
+  const firstLinux = captureExecutableIdentity(provider, 'linux').identity;
   writeFileSync(provider, 'BBBB');
-  const second = captureExecutableIdentity(provider, 'win32').identity;
-  assert.equal(first.length, second.length);
-  assert.notEqual(first.sha256, second.sha256);
+  const secondWindows = captureExecutableIdentity(provider, 'win32').identity;
+  const secondLinux = captureExecutableIdentity(provider, 'linux').identity;
+  assert.equal(firstWindows.length, secondWindows.length);
+  assert.notEqual(firstWindows.sha256, secondWindows.sha256);
+  assert.equal(firstLinux.length, secondLinux.length);
+  assert.notEqual(firstLinux.sha256, secondLinux.sha256);
 });

@@ -72,10 +72,8 @@ function sha256(path) {
 export function captureExecutableIdentity(path, platform = process.platform) {
   const canonicalPath = realpathSync(path);
   const stat = statSync(canonicalPath, { bigint: true });
-  const identity = { version: 1, length: stat.size.toString() };
-  if (platform === 'win32') {
-    identity.sha256 = sha256(canonicalPath);
-  } else {
+  const identity = { version: 1, length: stat.size.toString(), sha256: sha256(canonicalPath) };
+  if (platform !== 'win32') {
     identity.unix = {
       device: stat.dev.toString(),
       inode: stat.ino.toString(),
@@ -88,7 +86,8 @@ export function captureExecutableIdentity(path, platform = process.platform) {
 
 function identitiesMatch(actual, expected) {
   if (actual.version !== expected?.version || actual.length !== expected?.length) return false;
-  if (actual.sha256 !== undefined || expected?.sha256 !== undefined) return actual.sha256 === expected?.sha256;
+  if (actual.sha256 !== expected?.sha256) return false;
+  if (actual.unix === undefined && expected?.unix === undefined) return true;
   return (
     actual.unix?.device === expected?.unix?.device &&
     actual.unix?.inode === expected?.unix?.inode &&
