@@ -10,7 +10,7 @@ function fail(message) {
 
 export function verifyUpdaterJson(
   manifest,
-  { version, repository, requiredTargets },
+  { version, repository, requiredTargets, releaseAssets },
 ) {
   if (!manifest || typeof manifest !== 'object') fail('latest.json must contain an object');
   if (manifest.version !== version) {
@@ -20,7 +20,15 @@ export function verifyUpdaterJson(
     fail('latest.json is missing its platforms object');
   }
 
-  const expectedPath = `/${repository}/releases/download/paintnode-v${version}/`;
+  const expectedDownloadPath = `/${repository}/releases/download/paintnode-v${version}/`;
+  const expectedApiPath = `/repos/${repository}/releases/assets/`;
+  const currentReleaseUrls = releaseAssets
+    ? new Set(
+        releaseAssets.flatMap((asset) =>
+          [asset?.apiUrl, asset?.url].filter((value) => typeof value === 'string'),
+        ),
+      )
+    : null;
   for (const target of requiredTargets) {
     const entry = manifest.platforms[target];
     if (!entry || typeof entry !== 'object') fail(`latest.json is missing ${target}`);
@@ -33,8 +41,20 @@ export function verifyUpdaterJson(
     } catch {
       fail(`${target} has an invalid updater URL`);
     }
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.startsWith(expectedPath)) {
-      fail(`${target} does not point to ${repository} tag paintnode-v${version}`);
+    const taggedDownload =
+      url.protocol === 'https:' &&
+      url.hostname === 'github.com' &&
+      url.pathname.startsWith(expectedDownloadPath);
+    const apiAsset =
+      url.protocol === 'https:' &&
+      url.hostname === 'api.github.com' &&
+      url.pathname.startsWith(expectedApiPath) &&
+      /^\d+$/.test(url.pathname.slice(expectedApiPath.length));
+    if (!taggedDownload && !apiAsset) {
+      fail(`${target} does not point to the ${repository} release channel for paintnode-v${version}`);
+    }
+    if (currentReleaseUrls && !currentReleaseUrls.has(entry.url)) {
+      fail(`${target} does not point to an asset attached to paintnode-v${version}`);
     }
   }
 
@@ -42,18 +62,31 @@ export function verifyUpdaterJson(
 }
 
 async function main() {
-  const [, , manifestPath, ...requiredTargets] = process.argv;
+  const [, , manifestPath, ...args] = process.argv;
+  let releaseAssetsPath;
+  if (args[0] === '--release-assets') {
+    releaseAssetsPath = args[1];
+    args.splice(0, 2);
+  }
+  const requiredTargets = args;
   if (!manifestPath || requiredTargets.length === 0) {
-    fail('usage: verify-updater-json.mjs FILE TARGET [TARGET ...]');
+    fail('usage: verify-updater-json.mjs FILE [--release-assets FILE] TARGET [TARGET ...]');
   }
   const root = resolve(import.meta.dirname, '..');
   const packageJson = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
   const repository = new URL(packageJson.repository.url).pathname.replace(/^\//, '').replace(/\.git$/, '');
   const manifest = JSON.parse(await readFile(resolve(manifestPath), 'utf8'));
+  const releaseAssets = releaseAssetsPath
+    ? JSON.parse(await readFile(resolve(releaseAssetsPath), 'utf8')).assets
+    : undefined;
+  if (releaseAssetsPath && !Array.isArray(releaseAssets)) {
+    fail('release assets file must contain an assets array');
+  }
   const verified = verifyUpdaterJson(manifest, {
     version: packageJson.version,
     repository,
     requiredTargets,
+    releaseAssets,
   });
   for (const entry of verified) console.log(`[updater] verified ${entry.target}: ${entry.url}`);
 }

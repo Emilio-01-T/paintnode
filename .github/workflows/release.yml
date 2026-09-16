@@ -136,8 +136,10 @@ jobs:
           TAG="paintnode-v${VERSION}"
           mkdir -p "$RUNNER_TEMP/release-check"
           gh release download "$TAG" --pattern latest.json --dir "$RUNNER_TEMP/release-check"
+          gh release view "$TAG" --json assets > "$RUNNER_TEMP/release-check/release-assets.json"
           node scripts/verify-updater-json.mjs \
             "$RUNNER_TEMP/release-check/latest.json" \
+            --release-assets "$RUNNER_TEMP/release-check/release-assets.json" \
             linux-x86_64 linux-x86_64-appimage linux-x86_64-deb
 
       - name: Publish complete Linux release
