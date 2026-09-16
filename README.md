@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://paintnode.com">
+  <a href="https://github.com/white-cornerstone/paintnode">
     <img src=".github/social-preview.svg" alt="PaintNode - AI agents inside a real image editor" width="720">
   </a>
 </p>
@@ -11,14 +11,18 @@
 </p>
 
 <p align="center">
-  <a href="https://paintnode.com">Website</a>
+  <a href="https://github.com/white-cornerstone/paintnode">Upstream project</a>
   |
-  <a href="https://paintnode.com/download">Download</a>
-  |
-  <a href="https://github.com/white-cornerstone/paintnode/releases/latest">Latest release</a>
+  <a href="https://github.com/Emilio-01-T/paintnode/releases/latest">Releases</a>
   |
   <a href="docs/release.md">Release docs</a>
 </p>
+
+> **Unofficial derivative.** This repository is independently maintained by
+> Emilio-01-T from the
+> [White Cornerstone PaintNode project](https://github.com/white-cornerstone/paintnode).
+> It is not an official White Cornerstone release. Upstream attribution,
+> licensing, and trademark terms remain in effect.
 
 > PaintNode is still early software. Some tools and modules are not complete
 > yet, and the editor will keep improving step by step across future releases.
@@ -82,7 +86,8 @@ Full release notes: [0.2.0](docs/release-notes/0.2.0.md) ·
 [0.2.3](docs/release-notes/0.2.3.md) ·
 [0.2.4](docs/release-notes/0.2.4.md) ·
 [0.2.5](docs/release-notes/0.2.5.md) ·
-[0.2.6](docs/release-notes/0.2.6.md).
+[0.2.6](docs/release-notes/0.2.6.md) ·
+[0.2.7](docs/release-notes/0.2.7.md).
 
 ## Providers
 
@@ -270,7 +275,9 @@ export.
 - Local-first file I/O and project asset management.
 - macOS Quick Look extensions for ORA thumbnail and preview support.
 - Tauri desktop app built with Svelte 5, TypeScript, Rust, and Canvas2D.
-- Signed macOS builds and signed Tauri updater metadata from GitHub Releases.
+- macOS builds (signed and notarized when release credentials are configured),
+  Linux Debian/AppImage packages, and signed Tauri updater metadata from GitHub
+  Releases.
 - GPL-3.0-or-later source code.
 
 ## Trust Model
@@ -301,17 +308,20 @@ and file compatibility are still evolving.
 The current release channel is hosted on GitHub Releases:
 
 ```text
-https://github.com/white-cornerstone/paintnode/releases
+https://github.com/Emilio-01-T/paintnode/releases
 ```
 
 ## Download
 
 Download the latest public build from:
 
-[github.com/white-cornerstone/paintnode/releases/latest](https://github.com/white-cornerstone/paintnode/releases/latest)
+[github.com/Emilio-01-T/paintnode/releases/latest](https://github.com/Emilio-01-T/paintnode/releases/latest)
 
-macOS builds are signed and notarized by White Cornerstone Pty Ltd. PaintNode
-also checks GitHub Releases for signed Tauri updater metadata.
+Linux x86_64 releases include a `.deb` package for Ubuntu/Debian (with a desktop
+menu entry and application icons) and a portable AppImage. macOS release assets
+and their signing status are documented on each release. PaintNode checks this
+repository's GitHub Releases for updater metadata; Linux `.deb` and AppImage
+installations each receive an update in the same package format.
 
 ## Development
 
@@ -320,8 +330,12 @@ Requirements:
 - Node.js 22 or newer
 - Rust stable
 - macOS for signed/notarized macOS release builds
+- On Debian/Ubuntu, the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/):
+  `libwebkit2gtk-4.1-dev`, `build-essential`, `curl`, `wget`, `file`,
+  `libxdo-dev`, `libssl-dev`, `libayatana-appindicator3-dev`, and `librsvg2-dev`
 - AI features: Codex and Claude run as PaintNode-managed runtimes (no separate
   install needed); the Antigravity provider uses your existing installation.
+  Direct Antigravity image generation is currently macOS-only.
 
 Install dependencies:
 
@@ -353,6 +367,17 @@ Build the desktop app:
 npm run tauri:build
 ```
 
+Build and validate a local Ubuntu/Debian package without release-signing secrets:
+
+```bash
+npm run tauri:build:linux
+npm run verify:linux:deb
+```
+
+The package is written to `src-tauri/target/release/bundle/deb/`. The local
+command disables updater-artifact signing only for that build; tagged releases
+build and sign both `.deb` and AppImage updater artifacts in GitHub Actions.
+
 For a local signed/notarized macOS release build, create
 `.env.macos-signing.local` with the required Apple and Tauri updater signing
 values, then run:
@@ -363,11 +388,12 @@ npm run tauri:build:mac:signed
 
 ## Quality Checks
 
-Run both before publishing changes:
+Run all checks before publishing changes:
 
 ```bash
 npm run check
 npm test
+cargo check --locked --manifest-path src-tauri/Cargo.toml
 ```
 
 `npm run check` must pass with 0 errors and 0 warnings.
@@ -393,9 +419,12 @@ PaintNode releases are driven by tags named like:
 paintnode-v0.2.1
 ```
 
-The GitHub Actions release workflow builds signed macOS app bundles, uploads
-installer assets, uploads updater artifacts, and publishes `latest.json` for
-the in-app updater.
+The GitHub Actions release workflow builds macOS app bundles (signed and
+notarized when Apple credentials are configured) plus Linux x86_64 `.deb` and
+AppImage assets, uploads updater artifacts, and publishes `latest.json` for the
+in-app updater. Before the first Linux release, publish the `linux-x64` managed
+Codex and Claude artifacts with the **Provider runtimes** workflow so in-app
+provider setup is available on Linux.
 
 See [docs/release.md](docs/release.md) for the signing secrets and release
 checklist.

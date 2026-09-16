@@ -1,11 +1,11 @@
 [package]
 name = "paintnode"
-version = "0.2.6"
+version = "0.2.7"
 description = "Use managed Codex and Claude runtimes plus Antigravity to plan, generate, and edit image layers."
 authors = ["White Cornerstone Pty Ltd"]
 license = "GPL-3.0-or-later"
 publish = false
-repository = "https://github.com/white-cornerstone/paintnode"
+repository = "https://github.com/Emilio-01-T/paintnode"
 edition = "2021"
 rust-version = "1.77.2"
 

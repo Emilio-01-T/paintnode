@@ -4,11 +4,12 @@
 
 Please do not open a public issue for security-sensitive reports.
 
-Email security reports to:
+Report vulnerabilities privately through this repository's
+[GitHub Security Advisories](https://github.com/Emilio-01-T/paintnode/security/advisories/new).
 
-```text
-security@paintnode.com
-```
+Issues that also affect the upstream project should additionally be reported
+through the upstream process described by
+[White Cornerstone](https://github.com/white-cornerstone/paintnode/blob/main/SECURITY.md).
 
 Include:
 

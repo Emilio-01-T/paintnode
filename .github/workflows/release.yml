@@ -9,22 +9,92 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release-macos:
-    name: macOS ${{ matrix.target }}
-    runs-on: macos-latest
+  runtime-preflight:
+    name: managed runtime targets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify release version
+        run: npm run verify:release-config
+
+      - name: Verify published provider targets
+        run: |
+          node scripts/verify-managed-runtime-manifest.mjs \
+            https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json \
+            darwin arm64
+          node scripts/verify-managed-runtime-manifest.mjs \
+            https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json \
+            darwin x64
+          node scripts/verify-managed-runtime-manifest.mjs \
+            https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json \
+            linux x64
+
+  release:
+    name: ${{ matrix.name }}
+    needs: runtime-preflight
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
+      # tauri-action updates one shared latest.json. Serializing prevents parallel
+      # jobs from racing while replacing that release asset.
+      max-parallel: 1
       matrix:
         include:
-          - target: aarch64-apple-darwin
+          - name: Linux x86_64
+            runner: ubuntu-22.04
+            os: linux
+            rust_targets: x86_64-unknown-linux-gnu
+            args: --bundles deb,appimage
+          - runner: macos-14
+            name: macOS arm64
+            os: darwin
+            target: aarch64-apple-darwin
+            rust_targets: aarch64-apple-darwin
             args: --target aarch64-apple-darwin --bundles app,dmg
-          - target: x86_64-apple-darwin
+          - runner: macos-15-intel
+            name: macOS x86_64
+            os: darwin
+            target: x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
             args: --target x86_64-apple-darwin --bundles app,dmg
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils \
+            libfuse2
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -35,7 +105,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.rust_targets }}
 
       - name: Install frontend dependencies
         run: npm ci
@@ -56,7 +126,27 @@ jobs:
             echo "__PAINTNODE_RELEASE_NOTES__"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Detect Apple release signing
+        if: matrix.os == 'darwin'
+        id: apple_signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [[ -n "$APPLE_CERTIFICATE" && -n "$APPLE_CERTIFICATE_PASSWORD" && -n "$APPLE_SIGNING_IDENTITY" && -n "$APPLE_API_ISSUER" && -n "$APPLE_API_KEY" && -n "$APPLE_API_KEY_P8" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Apple signing and notarization are enabled."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Apple signing secrets are incomplete; publishing an unsigned macOS build." >&2
+          fi
+
       - name: Prepare App Store Connect key
+        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled == 'true'
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -66,6 +156,7 @@ jobs:
           chmod 600 "$RUNNER_TEMP/appstoreconnect/AuthKey_${APPLE_API_KEY}.p8"
 
       - name: Import Developer ID certificate
+        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -83,7 +174,27 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
-      - name: Build and publish Tauri release
+      - name: Build and upload Linux release assets
+        if: matrix.os == 'linux'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAINTNODE_SIGN_LINUX_DEB: '1'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: paintnode-v__VERSION__
+          releaseName: PaintNode v__VERSION__
+          releaseBody: ${{ steps.release_notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          retryAttempts: 3
+          tauriScript: node scripts/tauri-release.mjs
+          args: ${{ matrix.args }}
+
+      - name: Build and upload signed macOS release assets
+        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled == 'true'
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,7 +210,62 @@ jobs:
           tagName: paintnode-v__VERSION__
           releaseName: PaintNode v__VERSION__
           releaseBody: ${{ steps.release_notes.outputs.body }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
+          retryAttempts: 3
           args: ${{ matrix.args }}
+
+      - name: Build and upload unsigned macOS release assets
+        if: matrix.os == 'darwin' && steps.apple_signing.outputs.enabled != 'true'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: paintnode-v__VERSION__
+          releaseName: PaintNode v__VERSION__
+          releaseBody: ${{ steps.release_notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          retryAttempts: 3
+          args: ${{ matrix.args }}
+
+  publish-release:
+    name: Validate and publish release
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate updater metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="paintnode-v${VERSION}"
+          mkdir -p "$RUNNER_TEMP/release-check"
+          gh release download "$TAG" --pattern latest.json --dir "$RUNNER_TEMP/release-check"
+          node scripts/verify-updater-json.mjs \
+            "$RUNNER_TEMP/release-check/latest.json" \
+            linux-x86_64 linux-x86_64-appimage linux-x86_64-deb \
+            darwin-aarch64 darwin-x86_64
+
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          gh release edit "paintnode-v${VERSION}" --draft=false --latest

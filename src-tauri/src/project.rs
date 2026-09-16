@@ -9,8 +9,10 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(target_os = "macos")]
 use std::process::Stdio;
 use std::sync::{Arc, Mutex, OnceLock};
+#[cfg(target_os = "macos")]
 use std::time::SystemTime;
 
 use base64::Engine;
@@ -23,7 +25,9 @@ use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 use tauri::Manager;
 
-use crate::ai::{ensure_agent_run_dirs, now_id, TempJobDir, PAINTNODE_WORK_DIR};
+#[cfg(any(target_os = "macos", test))]
+use crate::ai::TempJobDir;
+use crate::ai::{ensure_agent_run_dirs, now_id, PAINTNODE_WORK_DIR};
 use crate::png::{encode_rgba_png, is_png, png_data_url_from_bytes, png_dimensions_from_bytes};
 
 const PROJECT_MANIFEST: &str = "paintnode.project.json";

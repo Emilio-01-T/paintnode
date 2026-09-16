@@ -17,6 +17,7 @@
   import { tooltip } from '../actions/tooltip';
   import { annotationFromDrag, type AnnotationItem } from '../engine/annotations';
   import { Dismiss } from '../icons';
+  import { displayShortcut } from '../platform';
 
   let canvasEl: HTMLCanvasElement;
   let containerEl: HTMLDivElement;
@@ -825,11 +826,11 @@
       <div class="empty-list" aria-label="No documents open">
         <button type="button" class="empty-action" onclick={() => ui.open('new')}>
           <span>New Document</span>
-          <kbd>⌘N</kbd>
+          <kbd>{displayShortcut('⌘N')}</kbd>
         </button>
         <button type="button" class="empty-action" onclick={() => void openCommand()}>
           <span>Open File</span>
-          <kbd>⌘O</kbd>
+          <kbd>{displayShortcut('⌘O')}</kbd>
         </button>
         <button type="button" class="empty-action" onclick={() => ui.openNew('workflow')}>
           <span>New Workflow Board</span>

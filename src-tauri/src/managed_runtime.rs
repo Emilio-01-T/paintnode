@@ -23,7 +23,7 @@ const DIRECTOR_ACTION_SCHEMA_FILE: &str = "bridge/director-action-schema.mjs";
 const WORKFLOW_DIRECTOR_SCHEMA_FILE: &str = "bridge/workflow-director-schema.mjs";
 const PROVIDER_EXECUTABLE_TRUST_FILE: &str = "bridge/provider-executable-trust.mjs";
 const DEFAULT_MANIFEST_URL: &str =
-    "https://github.com/white-cornerstone/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json";
+    "https://github.com/Emilio-01-T/paintnode/releases/download/provider-runtimes-latest/runtime-manifest.json";
 
 static RUNTIME_ROOT: OnceLock<PathBuf> = OnceLock::new();
 static BUSY_PROVIDER: Mutex<Option<String>> = Mutex::new(None);

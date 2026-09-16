@@ -13,6 +13,7 @@
   } from '../state/commands';
   import Icon from './Icon.svelte';
   import { Image } from '../icons';
+  import { displayShortcut } from '../platform';
 
   interface MItem {
     label?: string;
@@ -348,7 +349,7 @@
                   onpointerenter={() => (openSub = item.items && !itemDisabled(item) ? j : null)}
                 >
                   <span>{item.label}</span>
-                  {#if item.items}<span class="sc">›</span>{:else if item.shortcut}<span class="sc">{item.shortcut}</span>{/if}
+                  {#if item.items}<span class="sc">›</span>{:else if item.shortcut}<span class="sc">{displayShortcut(item.shortcut)}</span>{/if}
                 </button>
                 {#if item.items && openSub === j}
                   <div class="submenu">
@@ -358,7 +359,7 @@
                       {:else}
                         <button class="item" disabled={itemDisabled(child)} onclick={() => run(child)}>
                           <span>{child.label}</span>
-                          {#if child.shortcut}<span class="sc">{child.shortcut}</span>{/if}
+                          {#if child.shortcut}<span class="sc">{displayShortcut(child.shortcut)}</span>{/if}
                         </button>
                       {/if}
                     {/each}

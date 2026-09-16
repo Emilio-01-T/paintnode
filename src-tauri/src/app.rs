@@ -12,12 +12,14 @@ use sysinfo::Pid;
 use sysinfo::System;
 use tauri::menu::MenuItemKind;
 use tauri::AppHandle;
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 use tauri::Emitter;
 use tauri::Manager;
 use tauri::Runtime;
 
 use crate::project::mime_for_path;
 
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 const NATIVE_OPEN_FILES_EVENT: &str = "native-open-files";
 
 #[derive(Clone, Default)]
@@ -41,6 +43,7 @@ pub(crate) struct NativeDroppedFile {
     mime: Option<String>,
 }
 
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub(crate) fn queue_native_open_paths(app: &AppHandle, paths: Vec<String>) {
     if paths.is_empty() {
         return;

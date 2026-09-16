@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 
 const directory = resolve(process.argv[2] ?? 'dist/managed-runtimes');
-const repository = process.env.GITHUB_REPOSITORY ?? 'white-cornerstone/paintnode';
+const repository = process.env.GITHUB_REPOSITORY ?? 'Emilio-01-T/paintnode';
 const tag = process.env.RUNTIME_RELEASE_TAG ?? 'provider-runtimes-latest';
 const metadata = readdirSync(directory)
   .filter((name) => name.endsWith('.metadata.json'))

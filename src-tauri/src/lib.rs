@@ -8,16 +8,24 @@ mod provider_executable;
 #[cfg(test)]
 mod test_util;
 
+#[cfg(target_vendor = "apple")]
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
 };
 
-use tauri::{Emitter, Manager, RunEvent};
+use tauri::Emitter;
+#[cfg(target_vendor = "apple")]
+use tauri::Manager;
+#[cfg(any(target_vendor = "apple", target_os = "android"))]
+use tauri::RunEvent;
 
-use app::{queue_native_open_paths, PendingOpenPaths};
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+use app::queue_native_open_paths;
+use app::PendingOpenPaths;
 use menu::build_app_menu;
 
+#[cfg(target_vendor = "apple")]
 #[derive(Default)]
 struct StudyCleanupLifecycle {
     pending: Mutex<Option<provider_executable::StudyEvidenceRequest>>,
@@ -25,6 +33,7 @@ struct StudyCleanupLifecycle {
     allow_exit: AtomicBool,
 }
 
+#[cfg(target_vendor = "apple")]
 impl StudyCleanupLifecycle {
     fn schedule(&self, cleanup: provider_executable::StudyEvidenceRequest) -> Result<(), String> {
         let mut pending = self
@@ -88,30 +97,31 @@ fn create_launch_screen(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .manage(PendingOpenPaths::default())
-        .manage(StudyCleanupLifecycle::default())
+    let builder = tauri::Builder::default().manage(PendingOpenPaths::default());
+    #[cfg(target_vendor = "apple")]
+    let builder = builder.manage(StudyCleanupLifecycle::default());
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            if let Some(cleanup) = provider_executable::provider_free_study_cleanup()
-                .map_err(std::io::Error::other)?
-            {
-                #[cfg(target_vendor = "apple")]
-                {
-                    app.state::<StudyCleanupLifecycle>()
-                        .schedule(cleanup)
-                        .map_err(std::io::Error::other)?;
-                    tauri::WebviewWindowBuilder::new(
-                        app,
-                        "provider-free-study-cleanup",
-                        tauri::WebviewUrl::App("index.html".into()),
-                    )
-                    .visible(false)
-                    .build()?;
-                    return Ok(());
-                }
-                #[cfg(not(target_vendor = "apple"))]
+            let study_cleanup = provider_executable::provider_free_study_cleanup()
+                .map_err(std::io::Error::other)?;
+            #[cfg(target_vendor = "apple")]
+            if let Some(cleanup) = study_cleanup {
+                app.state::<StudyCleanupLifecycle>()
+                    .schedule(cleanup)
+                    .map_err(std::io::Error::other)?;
+                tauri::WebviewWindowBuilder::new(
+                    app,
+                    "provider-free-study-cleanup",
+                    tauri::WebviewUrl::App("index.html".into()),
+                )
+                .visible(false)
+                .build()?;
+                return Ok(());
+            }
+            #[cfg(not(target_vendor = "apple"))]
+            if study_cleanup.is_some() {
                 return Err(std::io::Error::other(
                     "Provider Free study cleanup requires macOS 14 or newer.",
                 )
@@ -257,12 +267,17 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            #[cfg(not(any(target_vendor = "apple", target_os = "android")))]
+            let _ = (&app, &event);
+
+            #[cfg(target_vendor = "apple")]
             if let RunEvent::ExitRequested { api, .. } = &event {
                 if app.state::<StudyCleanupLifecycle>().must_hold_process() {
                     api.prevent_exit();
                 }
             }
 
+            #[cfg(target_vendor = "apple")]
             if matches!(event, RunEvent::Ready) {
                 if let Some(cleanup) = app.state::<StudyCleanupLifecycle>().begin() {
                     let handle = app.clone();

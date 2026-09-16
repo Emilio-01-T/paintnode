@@ -29,6 +29,7 @@ coverage
 *.code-workspace
 
 # Local signing material
+/.release-secrets/
 *.p8
 *.p12
 *.pem

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { getSmoothStepPath, Position } from '@xyflow/system';
+  import { displayShortcut } from '../platform';
   import Icon from './Icon.svelte';
   import { tooltip } from '../actions/tooltip';
   import {
@@ -3036,7 +3037,7 @@
                 {#if (asset?.previewDataUrl ?? oraDocument?.previewDataUrl)}
                   <img class="preview-image" src={asset?.previewDataUrl ?? oraDocument?.previewDataUrl ?? ''} alt="" />
                 {:else}
-                  <span class="paste-placeholder"><Icon svg={Image} size={28} /><small>Right-click or ⌘V to paste</small></span>
+                  <span class="paste-placeholder"><Icon svg={Image} size={28} /><small>Right-click or {displayShortcut('⌘V')} to paste</small></span>
                 {/if}
               </div>
               <label class="slot-picker" onpointerdown={(event) => event.stopPropagation()}>
@@ -4171,7 +4172,7 @@
       disabled={clipboardImporting || !desktop || !project.path}
       onclick={() => void pasteClipboardImage(assetPreviewMenu!.nodeId)}
     >
-      <span>{clipboardImporting ? 'Pasting image…' : 'Paste image'}</span><kbd>⌘V</kbd>
+      <span>{clipboardImporting ? 'Pasting image…' : 'Paste image'}</span><kbd>{displayShortcut('⌘V')}</kbd>
     </button>
     {#if !desktop}<small>Available in the PaintNode desktop app.</small>{:else if !project.path}<small>Open a project folder first.</small>{/if}
   </div>

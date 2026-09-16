@@ -116,11 +116,13 @@ const ANTIGRAVITY_SAFETY_CATEGORIES: [(&str, &str); 4] = [
     ("HARM_CATEGORY_DANGEROUS_CONTENT", "dangerousContent"),
 ];
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Deserialize)]
 struct AntigravityKeychainEnvelope {
     token: Option<AntigravityStoredToken>,
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Deserialize)]
 struct AntigravityStoredToken {
     access_token: String,
@@ -329,6 +331,7 @@ fn remove_antigravity_debug_artifacts(job_path: &Path) {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn parse_antigravity_keychain_token(raw: &str) -> Result<AntigravityAuthToken, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -359,7 +362,7 @@ fn parse_antigravity_keychain_token(raw: &str) -> Result<AntigravityAuthToken, S
 fn load_antigravity_keychain_token() -> Result<AntigravityAuthToken, String> {
     #[cfg(not(target_os = "macos"))]
     {
-        return Err("Antigravity direct image generation is currently macOS-only because PaintNode reads the authenticated Antigravity token from macOS Keychain.".into());
+        Err("Antigravity direct image generation is currently macOS-only because PaintNode reads the authenticated Antigravity token from macOS Keychain.".into())
     }
 
     #[cfg(target_os = "macos")]
